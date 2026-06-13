@@ -1,0 +1,31 @@
+{
+  "random_forest": {
+    "r2_mean": 0.9006,
+    "r2_std": 0.0272,
+    "mae_mean": 4.5038
+  },
+  "ridge": {
+    "r2_mean": 0.8131,
+    "r2_std": 0.0175,
+    "mae_mean": 10.086
+  },
+  "gradient_boosting": {
+    "r2_mean": 0.9144,
+    "r2_std": 0.0246,
+    "mae_mean": 4.2675
+  },
+  "best_model": "gradient_boosting",
+  "target_year": 2028,
+  "feature_cols": [
+    "Gold_ma3",
+    "Total_Medals_ma3",
+    "Medal_Score_ma3",
+    "Athletes_ma3",
+    "Total_Medals_trend",
+    "Medal_Score_trend",
+    "Gold_growth",
+    "World_Rank",
+    "Streak",
+    "Athletes"
+  ]
+}
