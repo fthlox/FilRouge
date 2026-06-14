@@ -58,10 +58,12 @@ def load_report() -> dict:
 # ---------------------------------------------------------------------------
 
 def build_sidebar(data: dict) -> dict:
-    if os.path.exists("logo.png"):
-        st.sidebar.image("logo.png", width=250)
-    else:
-        st.sidebar.markdown("## 🏅 YPerf")
+    # On cherche le logo avec son vrai nom de fichier actuel
+    if os.path.exists("Yperf.png"):
+        st.sidebar.image("Yperf.png", use_container_width=True)
+    
+    # Le "else" a été supprimé. S'il n'y a pas de logo, 
+    # la barre latérale restera propre sans afficher de texte parasite.
 
     st.sidebar.markdown("---")
     st.sidebar.title("Filtres")
