@@ -144,7 +144,7 @@ def page_predictions(data: dict, filters: dict, report: dict) -> None:
         return colors.get(str(val), "")
 
     st.dataframe(
-        display.style.applymap(color_trend, subset=["Tendance"]),
+        display.style.map(color_trend, subset=["Tendance"]),
         use_container_width=True,
         height=550,
     )
