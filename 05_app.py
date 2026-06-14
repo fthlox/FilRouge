@@ -35,7 +35,8 @@ def load_data() -> dict:
         "athletes":     "athlete_scores.parquet",
         "country_year": "country_year_stats.parquet",
         "sport_year":   "sport_year_stats.parquet",
-        "clean":        "olympics_clean.parquet",
+        "clean":           "olympics_clean.parquet",
+        "pred_by_sport":   "predictions_2028_by_sport.parquet",
     }
     for key, fname in files.items():
         path = os.path.join(PROCESSED_DIR, fname)
@@ -104,41 +105,28 @@ def page_predictions(data: dict, filters: dict, report: dict) -> None:
         st.info("Lance 03_modeling.py pour générer les prédictions.")
         return
 
-    pred = data["predictions"].copy()
-    top_n = filters["top_n"]
-
-    # ── Filtre profil de pays
+    sports      = filters.get("sports", [])
     cluster_filter = filters["cluster"]
+    top_n       = filters["top_n"]
+
+    # ── Mode : vue par sport ou vue globale
+    use_sport_view = bool(sports) and "pred_by_sport" in data and not data["pred_by_sport"].empty
+
+    # ── KPI (toujours sur le global)
+    pred_global = data["predictions"].copy()
     if cluster_filter != "Tous" and "clusters" in data:
         nocs_in_cluster = data["clusters"].loc[
             data["clusters"]["Cluster_Label"] == cluster_filter, "NOC"
         ]
-        pred = pred[pred["NOC"].isin(nocs_in_cluster)]
+        pred_global = pred_global[pred_global["NOC"].isin(nocs_in_cluster)]
 
-    # ── KPI
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Pays analysés", len(pred))
+    c1.metric("Pays analysés", len(pred_global))
     best_name = report.get("best_model", "")
     c2.metric("Modèle", best_name.replace("_", " ").title() if best_name else "—")
     if best_name and best_name in report:
         c3.metric("R²", f"{report[best_name]['r2_mean']:.3f}")
         c4.metric("MAE", f"{report[best_name]['mae_mean']:.1f} médailles")
-
-    # ── Tableau
-    ref_label = f"Paris 2024 (réel)" if (pred.get("Total_Medals") is not None) else "Dernière édition"
-    st.subheader(f"Top {top_n} nations — médailles prédites pour 2028")
-
-    disp = pred.head(top_n)[[
-        "Rank_2028", "Team", "Total_Medals", "Pred_Medals_2028",
-        "Pred_Medals_Low", "Pred_Medals_High", "Delta_vs_Last", "Trend_Label"
-    ]].rename(columns={
-        "Total_Medals":      "Paris 2024 (réel)",
-        "Pred_Medals_2028":  "Prédiction 2028",
-        "Pred_Medals_Low":   "Borne basse",
-        "Pred_Medals_High":  "Borne haute",
-        "Delta_vs_Last":     "Δ vs Paris 2024",
-        "Trend_Label":       "Tendance",
-    })
 
     def color_trend(val):
         return {
@@ -149,16 +137,80 @@ def page_predictions(data: dict, filters: dict, report: dict) -> None:
             "En recul fort":   "background-color:#3d1010; color:#f87171",
         }.get(str(val), "")
 
-    st.dataframe(
-        disp.style.map(color_trend, subset=["Tendance"]),
-        use_container_width=True, height=500,
-    )
+    if use_sport_view:
+        # ── VUE PAR SPORT ────────────────────────────────────────────────────
+        df_sport = data["pred_by_sport"].copy()
 
-    # ── Graphique
-    st.subheader("Comparaison Paris 2024 (réel) vs 2028 (prédit)")
-    chart = pred.head(15).set_index("Team")[["Total_Medals", "Pred_Medals_2028"]]
-    chart.columns = ["Paris 2024 (réel)", "2028 (prédit)"]
-    st.bar_chart(chart)
+        # Filtre sur les sports sélectionnés
+        df_sport = df_sport[df_sport["Sport"].isin(sports)]
+
+        # Filtre profil de pays
+        if cluster_filter != "Tous" and "clusters" in data:
+            nocs_in_cluster = data["clusters"].loc[
+                data["clusters"]["Cluster_Label"] == cluster_filter, "NOC"
+            ]
+            df_sport = df_sport[df_sport["NOC"].isin(nocs_in_cluster)]
+
+        if df_sport.empty:
+            st.warning("Aucune donnée pour cette combinaison sport / profil de pays.")
+            return
+
+        for sport in sports:
+            sub = df_sport[df_sport["Sport"] == sport].head(top_n)
+            if sub.empty:
+                continue
+            st.subheader(f"🏅 {sport} — Top {top_n} nations prédites")
+            disp = sub[[
+                "Team", "Medals_Historical", "Pred_Medals_Sport_2028",
+                "Gold_Historical", "Sport_Share", "Trend_Label"
+            ]].rename(columns={
+                "Medals_Historical":       "Médailles historiques (3 éd.)",
+                "Pred_Medals_Sport_2028":  "Prédiction 2028 (sport)",
+                "Gold_Historical":         "Or historiques",
+                "Sport_Share":             "Part du sport (%)",
+                "Trend_Label":             "Tendance globale pays",
+            })
+            disp["Part du sport (%)"] = (disp["Part du sport (%)"] * 100).round(1)
+            st.dataframe(
+                disp.style.map(color_trend, subset=["Tendance globale pays"]),
+                use_container_width=True,
+                height=min(400, 50 + len(disp) * 38),
+            )
+            # Graphique
+            chart = sub.set_index("Team")["Pred_Medals_Sport_2028"]
+            st.bar_chart(chart)
+
+    else:
+        # ── VUE GLOBALE (tous sports confondus) ──────────────────────────────
+        st.subheader(f"Top {top_n} nations — médailles prédites pour 2028 (tous sports)")
+
+        if pred_global.empty:
+            st.warning("Aucune donnée pour ce profil de pays.")
+            return
+
+        disp = pred_global.head(top_n)[[
+            "Rank_2028", "Team", "Total_Medals", "Pred_Medals_2028",
+            "Pred_Medals_Low", "Pred_Medals_High", "Delta_vs_Last", "Trend_Label"
+        ]].rename(columns={
+            "Total_Medals":      "Paris 2024 (réel)",
+            "Pred_Medals_2028":  "Prédiction 2028",
+            "Pred_Medals_Low":   "Borne basse",
+            "Pred_Medals_High":  "Borne haute",
+            "Delta_vs_Last":     "Δ vs Paris 2024",
+            "Trend_Label":       "Tendance",
+        })
+
+        st.dataframe(
+            disp.style.map(color_trend, subset=["Tendance"]),
+            use_container_width=True, height=500,
+        )
+
+        st.subheader("Comparaison Paris 2024 (réel) vs 2028 (prédit)")
+        chart = pred_global.head(15).set_index("Team")[["Total_Medals", "Pred_Medals_2028"]]
+        chart.columns = ["Paris 2024 (réel)", "2028 (prédit)"]
+        st.bar_chart(chart)
+
+        st.caption("💡 Sélectionne un ou plusieurs sports dans la sidebar pour voir les prédictions par discipline.")
 
 # ---------------------------------------------------------------------------
 # PAGE 2 — Segmentation pays
