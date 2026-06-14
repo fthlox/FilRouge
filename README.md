@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="Yperf.png" alt="Logo YPerf" width="300">
+</p>
 # YPerf — Documentation du projet
 ## Anticipation des performances sportives · JO 2028 Los Angeles
 
